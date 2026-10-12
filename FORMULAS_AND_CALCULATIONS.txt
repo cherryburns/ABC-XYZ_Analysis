@@ -1,0 +1,384 @@
+================================================================================
+ABC-XYZ INVENTORY ANALYTICS DASHBOARD: MATHEMATICAL FORMULAS & CALCULATIONS
+================================================================================
+Subject: Python for Data Science
+Project: ABC-XYZ Inventory Analytics Dashboard
+File: FORMULAS_AND_CALCULATIONS.txt
+================================================================================
+
+This document provides a comprehensive mathematical and algorithmic reference
+for all formulas, statistical derivations, data cleaning rules, aggregations,
+and graphical computations implemented in the project.
+
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1. Core Variables and Notation
+2. Data Cleaning, Validation, and Derivation Formulas
+3. Portfolio-Level Summary Metrics
+4. Category-Wise Performance and Aggregations
+5. ABC Classification Formulas (Value-Based Pareto Analysis)
+6. XYZ Classification Formulas (Demand Predictability Analysis)
+7. Combined ABC-XYZ Matrix Formulation
+8. Graphical Visualizations: Formulas, Axes, and Algorithms
+   8.1 Dual-Axis ABC Pareto Chart
+   8.2 Category Sales Value Bar Chart
+   8.3 Category Annual Units Demanded Bar Chart
+   8.4 12-Month Demand Trend Line Chart
+   8.5 ABC-XYZ Product Count Matrix Heatmap
+   8.6 Demand CV Distribution Histogram
+9. Data Query and Filtering Algorithms
+10. Formula Summary and Code Mapping Table
+
+================================================================================
+1. CORE VARIABLES AND NOTATION
+================================================================================
+
+Let:
+  - N           = Total number of items (SKUs) in the dataset (N = 1,000)
+  - i           = Index of an individual SKU, where i in {1, 2, ..., N}
+  - m           = Index of a month, where m in {1, 2, ..., 12}
+                  (corresponding to Jan_Demand through Dec_Demand)
+  - D_{i, m}    = Monthly demand (in units) for item i in month m
+  - P_i         = Unit price (Price_Per_Unit) for item i
+  - U_i         = Total Annual Units demanded for item i
+  - V_i         = Total Sales Value (revenue) for item i
+  - c           = Product category (Category)
+  - C_total     = Number of unique merchandise categories
+
+================================================================================
+2. DATA CLEANING, VALIDATION, AND DERIVATION FORMULAS
+================================================================================
+
+2.1 Missing Demand Imputation:
+    Operational assumption: Missing monthly demand cells represent zero demand
+    during that period rather than an unrecorded sale.
+      D_{i, m} = 0   if D_{i, m} is missing / null (NaN)
+
+2.2 Negative Demand Clipping:
+    Negative demand entries (resulting from unadjusted return logging or data
+    entry errors) are lower-bounded at zero:
+      D_{i, m, clean} = max(0, D_{i, m})
+
+2.3 Price Validation and Non-Negativity:
+    Prices must be non-negative:
+      P_{i, clean} = P_i   if P_i >= 0
+      P_{i, clean} = 0     if P_i < 0 or P_i is missing / null (NaN)
+
+2.4 Total Annual Units Derivation & Reconciliation:
+    Total annual units demanded for item i is computed as the strict sum across
+    all 12 monthly demand records:
+      U_i = SUM_{m=1}^{12} D_{i, m}
+
+    Audit Inconsistency Check:
+      A reported annual total is flagged as inconsistent if:
+        | Reported_Annual_Units_i - SUM_{m=1}^{12} D_{i, m} | > epsilon
+      (where epsilon = 1e-5)
+
+2.5 Total Sales Value Derivation & Reconciliation:
+    Total sales revenue for item i is computed as the product of annual units
+    demanded and the price per unit:
+      V_i = U_i * P_i = ( SUM_{m=1}^{12} D_{i, m} ) * P_i
+
+    Audit Inconsistency Check:
+      A reported sales value is flagged as inconsistent if:
+        | Reported_Sales_Value_i - ( U_i * P_i ) | > epsilon
+
+2.6 Deduplication Rule:
+    A row is classified as duplicate and purged if all attributes match an
+    existing record:
+      Duplicate(row_k) = True   if EXISTS row_j (j < k) such that row_j == row_k
+
+================================================================================
+3. PORTFOLIO-LEVEL SUMMARY METRICS
+================================================================================
+
+3.1 Total Products Count:
+      Total_Products = N = Count(distinct Item_ID)
+
+3.2 Total Categories Count:
+      Total_Categories = Count(distinct Category)
+
+3.3 Total Annual Units Across Portfolio:
+      U_total = SUM_{i=1}^{N} U_i
+
+3.4 Total Portfolio Sales Value (Gross Revenue):
+      V_total = SUM_{i=1}^{N} V_i
+
+================================================================================
+4. CATEGORY-WISE PERFORMANCE AND AGGREGATIONS
+================================================================================
+
+For any specific category c in {Grocery, Apparel, Electronics, Toys, Home & Kitchen}:
+
+4.1 Category Product Count (SKU Breadth):
+      N_c = Count( { i | Category_i = c } )
+
+4.2 Category Total Annual Units Demanded:
+      U_c = SUM_{i in c} U_i
+
+4.3 Category Total Sales Value:
+      V_c = SUM_{i in c} V_i
+
+4.4 Category Sales Value Share Percentage:
+      Share_c (%) = ( V_c / V_total ) * 100%
+
+4.5 Average Unit Price within Category:
+      Avg_Price_c = ( 1 / N_c ) * SUM_{i in c} P_i
+
+4.6 Average Annual Units Per Product within Category:
+      Avg_Units_Per_Product_c = U_c / N_c = ( 1 / N_c ) * SUM_{i in c} U_i
+
+4.7 Monthly Aggregated Demand for Category c:
+      For each month m in {1, 2, ..., 12}:
+        Monthly_Demand_{c, m} = SUM_{i in c} D_{i, m}
+
+================================================================================
+5. ABC CLASSIFICATION FORMULAS (VALUE-BASED PARETO ANALYSIS)
+================================================================================
+
+ABC classification ranks items according to their contribution to total
+sales revenue (Pareto's 80/20 principle).
+
+5.1 Descending Revenue Ranking:
+    Sort all N items in descending order of V_i:
+      V_{(1)} >= V_{(2)} >= V_{(3)} >= ... >= V_{(N)}
+    Where rank r in {1, 2, ..., N} denotes the position of the SKU.
+
+5.2 Individual Sales Value Share:
+    For item at rank r:
+      s_{(r)} = V_{(r)} / V_total
+    (If V_total == 0, s_{(r)} = 0.0)
+
+5.3 Cumulative Sales Value Share:
+    The running cumulative proportion of revenue up to rank r:
+      C_r = SUM_{j=1}^{r} s_{(j)} = SUM_{j=1}^{r} ( V_{(j)} / V_total )
+    Note: C_0 = 0 and C_N = 1.0 (100%).
+
+5.4 Previous Cumulative Share (Left Boundary):
+    To determine class boundary inclusion, define previous cumulative share:
+      P_r = C_r - s_{(r)} = C_{r-1}   (with P_1 = 0)
+
+5.5 Class Assignment Rule:
+    Given user thresholds:
+      - alpha = A cutoff proportion (default: 0.80 or 80%)
+      - beta  = A+B cutoff proportion (default: 0.95 or 95%)
+      Condition: beta > alpha
+
+    Assignment logic:
+      ABC_Class_{(r)} = 'A'   if P_r < alpha
+      ABC_Class_{(r)} = 'B'   if alpha <= P_r < beta
+      ABC_Class_{(r)} = 'C'   if P_r >= beta
+
+================================================================================
+6. XYZ CLASSIFICATION FORMULAS (DEMAND PREDICTABILITY ANALYSIS)
+================================================================================
+
+XYZ classification segments items based on the stability and predictability
+of their consumption over the 12 observed months.
+
+6.1 Mean Monthly Demand (mu):
+    For each item i:
+      mu_i = ( 1 / 12 ) * SUM_{m=1}^{12} D_{i, m}
+
+6.2 Sample Variance of Monthly Demand (s^2):
+    Calculated using Bessel's correction (degrees of freedom = 12 - 1 = 11):
+      s_i^2 = ( 1 / 11 ) * SUM_{m=1}^{12} ( D_{i, m} - mu_i )^2
+
+6.3 Sample Standard Deviation of Monthly Demand (sigma):
+      sigma_i = sqrt( s_i^2 ) = sqrt( ( 1 / 11 ) * SUM_{m=1}^{12} ( D_{i, m} - mu_i )^2 )
+
+6.4 Coefficient of Variation (CV):
+    The dimensionless ratio of demand dispersion relative to average volume:
+      CV_i = sigma_i / mu_i
+
+    Zero-Mean Edge Case:
+      If mu_i == 0 (zero demand in all 12 months), CV_i is mathematically
+      undefined (division by zero). In the implementation:
+        CV_i = NaN (Not a Number)
+
+6.5 Class Assignment Rule:
+    Given user thresholds:
+      - X_cut = Maximum CV for Class X (default: 0.50)
+      - Y_cut = Maximum CV for Class Y (default: 1.00)
+      Condition: Y_cut > X_cut
+
+    Assignment logic:
+      XYZ_Class_i = 'N/A'   if mu_i == 0
+      XYZ_Class_i = 'X'     if mu_i > 0 and CV_i <= X_cut
+      XYZ_Class_i = 'Y'     if mu_i > 0 and X_cut < CV_i <= Y_cut
+      XYZ_Class_i = 'Z'     if mu_i > 0 and CV_i > Y_cut
+
+================================================================================
+7. COMBINED ABC-XYZ MATRIX FORMULATION
+================================================================================
+
+7.1 Combined Composite Class Code:
+    For item i:
+      ABC_XYZ_Class_i = ABC_Class_i + XYZ_Class_i
+
+    Resulting Segments:
+      - Standard 9 cells: { AX, AY, AZ, BX, BY, BZ, CX, CY, CZ }
+      - Inactive / Zero-demand items: { A-N/A, B-N/A, C-N/A }
+
+7.2 2D Contingency Table (Cross-Tabulation Matrix M):
+    Let j in {'A', 'B', 'C'} and k in {'X', 'Y', 'Z'}:
+      M_{j, k} = Count( { i | ABC_Class_i = j AND XYZ_Class_i = k } )
+
+================================================================================
+8. GRAPHICAL VISUALIZATIONS: FORMULAS, AXES, AND ALGORITHMS
+================================================================================
+
+--------------------------------------------------------------------------------
+8.1 Dual-Axis ABC Pareto Chart
+--------------------------------------------------------------------------------
+Visualizes Pareto's 80/20 rule: bars show individual SKU revenue, overlaid
+with a cumulative percentage line.
+
+  Mathematical Structure:
+    - Independent Variable (X-axis):
+        Rank r in {1, 2, ..., N}, ordered such that V_{(r)} is descending.
+    - Primary Y-axis (Y1 - Left Axis, Bar Chart):
+        Height(r) = V_{(r)} = Total_Sales_Value of SKU at rank r
+    - Secondary Y-axis (Y2 - Right Axis, Line Chart):
+        Cumulative_Percent(r) = C_r * 100% = [ SUM_{j=1}^{r} ( V_{(j)} / V_total ) ] * 100%
+    - Secondary Axis Scaling:
+        Y2_min = 0%, Y2_max = 100%
+        Overlay: overlaying = 'y', side = 'right'
+
+--------------------------------------------------------------------------------
+8.2 Category Sales Value Bar Chart
+--------------------------------------------------------------------------------
+Compares gross revenue across product categories.
+
+  Mathematical Structure:
+    - Categorical X-axis:
+        Category c in {Grocery, Apparel, Electronics, Toys, Home & Kitchen}
+    - Numeric Y-axis:
+        V_c = SUM_{i in c} V_i
+    - Data Labels:
+        Formatted using SI unit formatting (e.g., 912M, 99.4M, 25.1M).
+
+--------------------------------------------------------------------------------
+8.3 Category Annual Units Demanded Bar Chart
+--------------------------------------------------------------------------------
+Compares total physical volume demanded across categories.
+
+  Mathematical Structure:
+    - Categorical X-axis:
+        Category c in {Grocery, Apparel, Electronics, Toys, Home & Kitchen}
+    - Numeric Y-axis:
+        U_c = SUM_{i in c} U_i
+    - Data Labels:
+        Formatted using SI unit formatting (e.g., 14.3M, 1.40M, 625k).
+
+--------------------------------------------------------------------------------
+8.4 12-Month Demand Trend Line Chart
+--------------------------------------------------------------------------------
+Tracks consumption trajectory month-over-month for all or selected categories.
+
+  Mathematical Structure:
+    - Discrete Temporal X-axis:
+        Month m in {Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec}
+    - Numeric Y-axis:
+        Demand_m = SUM_{i in Active_Filter} D_{i, m}
+    - Representation:
+        Continuous line with markers at every discrete monthly coordinate (m, Demand_m).
+
+--------------------------------------------------------------------------------
+8.5 ABC-XYZ Product Count Matrix Heatmap
+--------------------------------------------------------------------------------
+Presents product frequency across the 3x3 classification space.
+
+  Mathematical Structure:
+    - Rows (Y-axis): ABC Class in {'A', 'B', 'C'}
+    - Columns (X-axis): XYZ Class in {'X', 'Y', 'Z'}
+    - Cell Color Intensity & Text Annotation:
+        M_{j, k} = SUM_{i=1}^{N} I( ABC_Class_i == j  AND  XYZ_Class_i == k )
+        where I(condition) is the indicator function (1 if true, 0 if false).
+    - Aspect Ratio: Aspect='auto', Color Scale='Blues'.
+
+--------------------------------------------------------------------------------
+8.6 Demand CV Distribution Histogram
+--------------------------------------------------------------------------------
+Depicts the probability distribution of demand variability across all SKUs.
+
+  Mathematical Structure:
+    - Filter: Subset of SKUs where CV_i is not null / not NaN.
+    - Binning Algorithm:
+        Number of bins = K = 35
+        Range: R = [ CV_min, CV_max ]
+        Bin width: w = ( CV_max - CV_min ) / 35
+        Bin interval b_k = [ CV_min + (k-1)*w, CV_min + k*w )  for k in {1, ..., 35}
+    - Y-axis (Frequency Count):
+        Count(b_k) = Count( { i | CV_i in b_k } )
+    - Color Encoding:
+        Grouped and color-coded by XYZ_Class in {'X', 'Y', 'Z'}.
+
+================================================================================
+9. DATA QUERY AND FILTERING ALGORITHMS
+================================================================================
+
+In the 'Explore & Download' tab, dynamic compound filtering is executed
+using Boolean logic:
+
+9.1 Multi-Criteria Class and Category Filter:
+    Let:
+      F_ABC = Set of selected ABC classes (subset of {'A', 'B', 'C'})
+      F_XYZ = Set of selected XYZ classes (subset of {'X', 'Y', 'Z', 'N/A'})
+      F_Cat = Set of selected categories
+    
+    A product i satisfies the discrete filter if:
+      Discrete_Match_i = ( ABC_Class_i in F_ABC ) AND 
+                         ( XYZ_Class_i in F_XYZ ) AND 
+                         ( Category_i in F_Cat )
+
+9.2 Substring Search Filter:
+    Given search text query Q:
+      Search_Match_i = Contains( String(Item_ID_i), Q ) OR
+                       Contains( String(Item_Name_i), Q ) OR
+                       Contains( String(Category_i), Q )
+    (Case-insensitive evaluation)
+
+9.3 Composite Filter:
+      Retain_Item_i = Discrete_Match_i AND ( Search_Match_i  if Q is not empty )
+
+================================================================================
+10. FORMULA SUMMARY AND CODE MAPPING TABLE
+================================================================================
+
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Metric / Calculation   | Mathematical Formula          | Python / Pandas Implementation                       | Module File Location      |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Total Annual Units     | U_i = SUM_{m=1}^{12} D_{i, m} | df[MONTHS].sum(axis=1)                               | data_cleaning.py          |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Total Sales Value      | V_i = U_i * P_i               | df['Total_Annual_Units'] * df['Price_Per_Unit']      | data_cleaning.py          |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Monthly Mean Demand    | mu_i = (1/12) * SUM D_{i, m}  | df[MONTHS].mean(axis=1)                              | abc_xyz_analysis.py       |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Demand Sample Std Dev  | sigma_i = sqrt(s^2, ddof=1)   | df[MONTHS].std(axis=1, ddof=1)                       | abc_xyz_analysis.py       |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Demand Coeff. of Var.  | CV_i = sigma_i / mu_i         | df['Std_Demand'] / df['Mean_Demand'].replace(0, nan) | abc_xyz_analysis.py       |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Revenue Share          | s_i = V_i / V_total           | df['Total_Sales_Value'] / df['Total_Sales_Value'].sum() | abc_xyz_analysis.py    |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Cumulative Rev. Share  | C_r = SUM_{j=1}^r s_{(j)}     | df['Sales_Value_Share'].cumsum()                     | abc_xyz_analysis.py       |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Prev. Cumulative Share | P_r = C_r - s_r = C_{r-1}     | df['Cumulative_Value_Share'] - df['Sales_Value_Share'] | abc_xyz_analysis.py     |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| ABC Classification     | A: P_r < a; B: P_r < b; C     | np.select([prev < a_cut, prev < b_cut], ['A','B'],'C') | abc_xyz_analysis.py     |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| XYZ Classification     | N/A: mu=0; X: CV<=x; Y: CV<=y | np.select([mu.eq(0), cv.le(x), cv.le(y)], ['N/A','X','Y'],'Z') | abc_xyz_analysis.py |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| ABC-XYZ Composite Code | ABC + XYZ                     | df['ABC_Class'] + df['XYZ_Class']                    | abc_xyz_analysis.py       |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Category Rev. Share %  | (V_c / V_total) * 100%        | summary['Sales_Value'] / summary['Sales_Value'].sum() * 100 | category_performance.py |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| Pareto Cumulative Line | C_r * 100                     | pareto['Cumulative_Value_Share'] * 100               | abc_xyz_analysis.py       |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+| 3x3 Heatmap Matrix     | Pivot Count(j, k)             | df.pivot_table(index='ABC', columns='XYZ', aggfunc='count') | abc_xyz_analysis.py |
++------------------------+-------------------------------+------------------------------------------------------+---------------------------+
+
+================================================================================
+END OF FORMULAS AND CALCULATIONS REFERENCE
+================================================================================
